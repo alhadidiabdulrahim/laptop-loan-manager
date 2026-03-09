@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Label — {{ laptop.asset_number }}</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #f0f0f0; display: flex; align-items: center;
+  justify-content: center; min-height: 100vh; font-family: 'Courier New', monospace;
+  flex-direction: column; gap: 20px; padding: 20px;
+}
+.controls {
+  display: flex; gap: 12px; align-items: center;
+  background: white; padding: 16px 24px; border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.1);
+}
+.controls button {
+  padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer;
+  font-size: 14px; font-weight: 600; font-family: 'Courier New', monospace;
+}
+.btn-print { background: #0d0f14; color: white; }
+.btn-back { background: #e5e7eb; color: #374151; }
+.label {
+  width: 85mm; background: white; border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.15); overflow: hidden;
+  border: 2px solid #0d0f14;
+}
+.label-top {
+  background: #0d0f14; color: white; padding: 10px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.label-top .company { font-size: 9px; letter-spacing: 2px; opacity: .7; text-transform: uppercase; }
+.label-top .badge {
+  font-size: 9px; background: #00d4ff; color: #000; padding: 2px 6px;
+  border-radius: 3px; letter-spacing: 1px; font-weight: 700;
+}
+.label-body { padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; }
+.label-info { flex: 1; }
+.asset-num {
+  font-size: 22px; font-weight: 700; color: #0d0f14; letter-spacing: 1px; line-height: 1;
+}
+.laptop-name { font-size: 12px; color: #374151; margin-top: 4px; font-weight: 600; }
+.sn-row { margin-top: 8px; }
+.sn-label { font-size: 8px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1.5px; }
+.sn-value { font-size: 11px; color: #374151; font-weight: 600; letter-spacing: .5px; }
+.qr-box { flex-shrink: 0; }
+#qrcode canvas, #qrcode img { width: 70px !important; height: 70px !important; }
+.label-footer {
+  background: #f9fafb; border-top: 1px solid #e5e7eb; padding: 6px 14px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.label-footer .it-tag { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; }
+.label-footer .date { font-size: 9px; color: #9ca3af; }
+
+/* Multiple label sizes */
+.label-sm { transform: scale(0.75); transform-origin: center top; }
+.label-lg { width: 100mm; }
+
+@media print {
+  body { background: white; padding: 0; gap: 0; }
+  .controls { display: none; }
+  .label {
+    box-shadow: none; margin: 0; border-radius: 0;
+    page-break-inside: avoid;
+  }
+  @page { size: 85mm auto; margin: 0; }
+}
+</style>
+</head>
+<body>
+<div class="controls">
+  <button class="btn-back" onclick="window.close()">← Back</button>
+  <span style="font-size:13px;color:#6b7280;">Label for <strong>{{ laptop.asset_number }}</strong></span>
+  <button class="btn-print" onclick="window.print()">🖨 Print Label</button>
+</div>
+
+<div class="label" id="labelEl">
+  <div class="label-top">
+    <span class="company">IT Department Asset</span>
+    <span class="badge">LAPTOP</span>
+  </div>
+  <div class="label-body">
+    <div class="label-info">
+      <div class="asset-num">{{ laptop.asset_number }}</div>
+      <div class="laptop-name">{{ laptop.brand }} {{ laptop.model }}</div>
+      <div class="sn-row">
+        <div class="sn-label">Serial Number</div>
+        <div class="sn-value">{{ laptop.serial_number }}</div>
+      </div>
+      {% if laptop.purchase_date %}
+      <div class="sn-row">
+        <div class="sn-label">Purchase Date</div>
+        <div class="sn-value">{{ laptop.purchase_date }}</div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="qr-box">
+      <div id="qrcode"></div>
+    </div>
+  </div>
+  <div class="label-footer">
+    <span class="it-tag">IT Helpdesk Property</span>
+    <span class="date">{{ laptop.created_at[:10] if laptop.created_at else '' }}</span>
+  </div>
+</div>
+
+<script>
+new QRCode(document.getElementById("qrcode"), {
+  text: "{{ laptop.asset_number }}|{{ laptop.serial_number }}|{{ laptop.brand }} {{ laptop.model }}",
+  width: 70,
+  height: 70,
+  colorDark: "#0d0f14",
+  colorLight: "#ffffff",
+  correctLevel: QRCode.CorrectLevel.M
+});
+</script>
+</body>
+</html>

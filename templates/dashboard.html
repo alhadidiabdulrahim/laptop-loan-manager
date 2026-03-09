@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — LoanTrack{% endblock %}
+
+{% block content %}
+<div class="topbar">
+  <div>
+    <div class="topbar-title">Dashboard</div>
+    <div style="font-size:12px;color:var(--text2);margin-top:2px;" id="currentDate"></div>
+  </div>
+  {% if session.role == 'admin' %}
+  <div class="topbar-actions">
+    <button class="btn btn-secondary btn-sm" onclick="openModal('addLaptopModal')">+ Add Laptop</button>
+    <button class="btn btn-primary btn-sm" onclick="openModal('createLoanModal')">+ New Loan</button>
+  </div>
+  {% endif %}
+</div>
+
+<div class="content">
+  <div class="stats-grid">
+    <div class="stat-card blue">
+      <div class="stat-icon">💻</div>
+      <div class="stat-value">{{ total }}</div>
+      <div class="stat-label">Total Laptops</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-icon">📤</div>
+      <div class="stat-value">{{ loaned }}</div>
+      <div class="stat-label">Currently Loaned</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-icon">✅</div>
+      <div class="stat-value">{{ available }}</div>
+      <div class="stat-label">Available</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-icon">⚠️</div>
+      <div class="stat-value">{{ overdue }}</div>
+      <div class="stat-label">Overdue Returns</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3>📋 Recent Loan Activity</h3>
+      <a href="/loans" class="btn btn-secondary btn-sm">View All</a>
+    </div>
+    <div class="table-container">
+      {% if recent_loans %}
+      <table>
+        <thead>
+          <tr>
+            <th>Asset #</th>
+            <th>Laptop</th>
+            <th>Employee</th>
+            <th>Loan Date</th>
+            <th>Expected Return</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for loan in recent_loans %}
+          <tr>
+            <td><span class="asset-num">{{ loan.laptop_asset_number }}</span></td>
+            <td>{{ loan.brand }} {{ loan.model }}</td>
+            <td>
+              <div style="font-weight:600;">{{ loan.employee_name }}</div>
+              <div style="font-size:11px;color:var(--text2);font-family:var(--mono);">{{ loan.employee_id }}</div>
+            </td>
+            <td style="font-family:var(--mono);font-size:12px;">{{ loan.loan_date }}</td>
+            <td style="font-family:var(--mono);font-size:12px;">{{ loan.expected_return_date }}</td>
+            <td>
+              {% if loan.status == 'returned' %}
+              <span class="badge badge-returned"><span class="badge-dot"></span>Returned</span>
+              {% else %}
+              <span class="badge badge-loaned"><span class="badge-dot"></span>Loaned</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <h4>No loan activity yet</h4>
+        <p>Create your first loan to get started</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Add Laptop Modal -->
+<div class="modal-overlay" id="addLaptopModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>➕ Add New Laptop</h3>
+      <button class="modal-close" onclick="closeModal('addLaptopModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Brand *</label>
+          <input type="text" id="al_brand" placeholder="e.g. HP, Dell, Lenovo">
+        </div>
+        <div class="form-group">
+          <label>Model *</label>
+          <input type="text" id="al_model" placeholder="e.g. EliteBook 840 G5">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Serial Number *</label>
+        <input type="text" id="al_sn" placeholder="e.g. CNF1234567">
+      </div>
+      <div class="form-group">
+        <label>Purchase Date</label>
+        <input type="date" id="al_pd">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="al_notes" placeholder="Optional notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addLaptopModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddLaptop()">Add Laptop</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Loan Modal -->
+<div class="modal-overlay" id="createLoanModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>📤 Create New Loan</h3>
+      <button class="modal-close" onclick="closeModal('createLoanModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Laptop Asset Number *</label>
+        <input type="text" id="cl_asset" placeholder="e.g. LAP-0001">
+        <div class="form-hint">Enter the asset number of an available laptop</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Employee ID *</label>
+          <input type="text" id="cl_empid" placeholder="e.g. EMP-001">
+        </div>
+        <div class="form-group">
+          <label>Employee Name *</label>
+          <input type="text" id="cl_empname" placeholder="Full name">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Department</label>
+        <input type="text" id="cl_dept" placeholder="e.g. Engineering, Finance">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Loan Date *</label>
+          <input type="date" id="cl_ldate">
+        </div>
+        <div class="form-group">
+          <label>Expected Return Date *</label>
+          <input type="date" id="cl_rdate">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Reason for Loan *</label>
+        <textarea id="cl_reason" placeholder="e.g. Laptop repair, New employee onboarding..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('createLoanModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateLoan()">Create Loan</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('currentDate').textContent = new Date().toLocaleDateString('en-US', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+document.getElementById('cl_ldate').value = new Date().toISOString().split('T')[0];
+
+async function submitAddLaptop() {
+  const data = {
+    brand: document.getElementById('al_brand').value,
+    model: document.getElementById('al_model').value,
+    serial_number: document.getElementById('al_sn').value,
+    purchase_date: document.getElementById('al_pd').value,
+    notes: document.getElementById('al_notes').value
+  };
+  if (!data.brand || !data.model || !data.serial_number) { toast('Fill all required fields', 'error'); return; }
+  const r = await fetch('/api/laptops', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const res = await r.json();
+  if (res.success) { toast(`Laptop added: ${res.laptop.asset_number}`); closeModal('addLaptopModal'); setTimeout(() => location.reload(), 800); }
+  else toast(res.error || 'Error', 'error');
+}
+
+async function submitCreateLoan() {
+  const data = {
+    laptop_asset_number: document.getElementById('cl_asset').value.trim().toUpperCase(),
+    employee_id: document.getElementById('cl_empid').value.trim(),
+    employee_name: document.getElementById('cl_empname').value.trim(),
+    department: document.getElementById('cl_dept').value.trim(),
+    loan_date: document.getElementById('cl_ldate').value,
+    expected_return_date: document.getElementById('cl_rdate').value,
+    reason: document.getElementById('cl_reason').value.trim()
+  };
+  if (!data.laptop_asset_number || !data.employee_id || !data.employee_name || !data.loan_date || !data.expected_return_date || !data.reason) {
+    toast('Fill all required fields', 'error'); return;
+  }
+  const r = await fetch('/api/loans', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const res = await r.json();
+  if (res.success) { toast('Loan created!'); closeModal('createLoanModal'); setTimeout(() => location.reload(), 800); }
+  else toast(res.error || 'Error', 'error');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}Inventory — LoanTrack{% endblock %}
+
+{% block content %}
+<div class="topbar">
+  <div class="topbar-title">💻 Laptop Inventory</div>
+  {% if session.role == 'admin' %}
+  <div class="topbar-actions">
+    <button class="btn btn-primary" onclick="openModal('addLaptopModal')">+ Add Laptop</button>
+  </div>
+  {% endif %}
+</div>
+
+<div class="search-bar">
+  <div class="search-input-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Search by asset #, serial, brand, model..." oninput="loadLaptops()">
+  </div>
+  <div class="filter-tabs">
+    <button class="filter-tab active" onclick="setFilter('', this)">All</button>
+    <button class="filter-tab" onclick="setFilter('available', this)">Available</button>
+    <button class="filter-tab" onclick="setFilter('loaned', this)">Loaned</button>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <a href="/api/export/inventory" class="btn btn-secondary btn-sm">⬇ Export CSV</a>
+  </div>
+</div>
+
+<div class="content" style="padding-top:24px;">
+  <div class="card">
+    <div class="table-container">
+      <table id="laptopsTable">
+        <thead>
+          <tr>
+            <th>Asset Number</th>
+            <th>Brand / Model</th>
+            <th>Serial Number</th>
+            <th>Purchase Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="laptopsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add Laptop Modal -->
+<div class="modal-overlay" id="addLaptopModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>➕ Add New Laptop</h3>
+      <button class="modal-close" onclick="closeModal('addLaptopModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Brand *</label>
+          <input type="text" id="al_brand" placeholder="e.g. HP, Dell, Lenovo">
+        </div>
+        <div class="form-group">
+          <label>Model *</label>
+          <input type="text" id="al_model" placeholder="e.g. EliteBook 840 G5">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Serial Number *</label>
+        <input type="text" id="al_sn" placeholder="e.g. CNF1234567">
+      </div>
+      <div class="form-group">
+        <label>Purchase Date</label>
+        <input type="date" id="al_pd">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="al_notes" placeholder="Optional notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addLaptopModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddLaptop()">Add Laptop</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Laptop Modal -->
+<div class="modal-overlay" id="editLaptopModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Edit Laptop</h3>
+      <button class="modal-close" onclick="closeModal('editLaptopModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit_asset">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Brand *</label>
+          <input type="text" id="edit_brand">
+        </div>
+        <div class="form-group">
+          <label>Model *</label>
+          <input type="text" id="edit_model">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Serial Number *</label>
+        <input type="text" id="edit_sn">
+      </div>
+      <div class="form-group">
+        <label>Purchase Date</label>
+        <input type="date" id="edit_pd">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="edit_notes"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editLaptopModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditLaptop()">Save Changes</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentFilter = '';
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  loadLaptops();
+}
+
+async function loadLaptops() {
+  const q = document.getElementById('searchInput').value;
+  const url = `/api/laptops?q=${encodeURIComponent(q)}&status=${currentFilter}`;
+  const res = await fetch(url);
+  const laptops = await res.json();
+  const tbody = document.getElementById('laptopsBody');
+  if (!laptops.length) {
+    tbody.innerHTML = `<tr><td colspan="6">
+      <div class="empty-state"><div class="empty-icon">💻</div>
+      <h4>No laptops found</h4><p>Try adjusting your search or filters</p></div>
+    </td></tr>`;
+    return;
+  }
+  tbody.innerHTML = laptops.map(l => `
+    <tr>
+      <td>
+        <span class="asset-num">${l.asset_number}</span>
+      </td>
+      <td>
+        <div style="font-weight:600;">${l.brand}</div>
+        <div style="font-size:12px;color:var(--text2);">${l.model}</div>
+      </td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text2);">${l.serial_number}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text2);">${l.purchase_date || '—'}</td>
+      <td>
+        <span class="badge badge-${l.status}">
+          <span class="badge-dot"></span>
+          ${l.status.charAt(0).toUpperCase() + l.status.slice(1)}
+        </span>
+      </td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <a href="/label/${l.asset_number}" target="_blank" class="btn btn-secondary btn-sm btn-icon" title="Print Label">🏷️</a>
+          ${USER_ROLE === 'admin' ? `
+          <button class="btn btn-secondary btn-sm btn-icon" onclick="editLaptop('${l.asset_number}')" title="Edit">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteLaptop('${l.asset_number}')" title="Delete">🗑️</button>
+          ` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function submitAddLaptop() {
+  const data = {
+    brand: document.getElementById('al_brand').value.trim(),
+    model: document.getElementById('al_model').value.trim(),
+    serial_number: document.getElementById('al_sn').value.trim(),
+    purchase_date: document.getElementById('al_pd').value,
+    notes: document.getElementById('al_notes').value.trim()
+  };
+  if (!data.brand || !data.model || !data.serial_number) { toast('Fill all required fields', 'error'); return; }
+  const r = await fetch('/api/laptops', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const res = await r.json();
+  if (res.success) {
+    toast(`Laptop added: ${res.laptop.asset_number}`);
+    closeModal('addLaptopModal');
+    ['al_brand','al_model','al_sn','al_pd','al_notes'].forEach(id => document.getElementById(id).value = '');
+    loadLaptops();
+  } else toast(res.error || 'Error', 'error');
+}
+
+async function editLaptop(assetNum) {
+  const r = await fetch(`/api/laptops/${assetNum}`);
+  const l = await r.json();
+  document.getElementById('edit_asset').value = l.asset_number;
+  document.getElementById('edit_brand').value = l.brand;
+  document.getElementById('edit_model').value = l.model;
+  document.getElementById('edit_sn').value = l.serial_number;
+  document.getElementById('edit_pd').value = l.purchase_date || '';
+  document.getElementById('edit_notes').value = l.notes || '';
+  openModal('editLaptopModal');
+}
+
+async function submitEditLaptop() {
+  const assetNum = document.getElementById('edit_asset').value;
+  const data = {
+    brand: document.getElementById('edit_brand').value.trim(),
+    model: document.getElementById('edit_model').value.trim(),
+    serial_number: document.getElementById('edit_sn').value.trim(),
+    purchase_date: document.getElementById('edit_pd').value,
+    notes: document.getElementById('edit_notes').value.trim()
+  };
+  const r = await fetch(`/api/laptops/${assetNum}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  const res = await r.json();
+  if (res.success) { toast('Laptop updated'); closeModal('editLaptopModal'); loadLaptops(); }
+  else toast(res.error || 'Error', 'error');
+}
+
+async function deleteLaptop(assetNum) {
+  if (!confirm(`Delete laptop ${assetNum}? This cannot be undone.`)) return;
+  const r = await fetch(`/api/laptops/${assetNum}`, { method: 'DELETE' });
+  const res = await r.json();
+  if (res.success) { toast('Laptop deleted'); loadLaptops(); }
+  else toast(res.error || 'Error', 'error');
+}
+
+loadLaptops();
+</script>
+{% endblock %}

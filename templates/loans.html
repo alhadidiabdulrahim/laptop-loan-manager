@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+{% block title %}Loans — LoanTrack{% endblock %}
+
+{% block content %}
+<div class="topbar">
+  <div class="topbar-title">📋 Loan Management</div>
+  {% if session.role in ('admin', 'superadmin') %}
+  <div class="topbar-actions">
+    <button class="btn btn-primary" onclick="openModal('createLoanModal')">+ New Loan</button>
+  </div>
+  {% endif %}
+</div>
+
+<div class="search-bar">
+  <div class="search-input-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Search by asset #, employee name, ID, serial #..." oninput="loadLoans()">
+  </div>
+  <div class="filter-tabs">
+    <button class="filter-tab active" onclick="setFilter('', this)">All</button>
+    <button class="filter-tab" onclick="setFilter('loaned', this)">Active Loans</button>
+    <button class="filter-tab" onclick="setFilter('returned', this)">Returned</button>
+  </div>
+  <div style="margin-left:auto;">
+    <a href="/api/export/loans" class="btn btn-secondary btn-sm">⬇ Export CSV</a>
+  </div>
+</div>
+
+<div class="content" style="padding-top:24px;">
+  <div class="card">
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Asset #</th>
+            <th>Laptop</th>
+            <th>Employee</th>
+            <th>Department</th>
+            <th>Loan Date</th>
+            <th>Expected Return</th>
+            <th>Status</th>
+            <th>Added By</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="loansBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Create Loan Modal -->
+<div class="modal-overlay" id="createLoanModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>📤 Create New Loan</h3>
+      <button class="modal-close" onclick="closeModal('createLoanModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Laptop Asset Number *</label>
+        <input type="text" id="cl_asset" placeholder="e.g. LAP-0001" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" onblur="lookupAsset()">
+        <div class="form-hint" id="assetInfo"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Employee ID *</label>
+          <input type="text" id="cl_empid" placeholder="e.g. EMP-001">
+        </div>
+        <div class="form-group">
+          <label>Employee Name *</label>
+          <input type="text" id="cl_empname" placeholder="Full name">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Department</label>
+        <input type="text" id="cl_dept" placeholder="e.g. Engineering, HR, Finance">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Loan Date *</label>
+          <input type="date" id="cl_ldate">
+        </div>
+        <div class="form-group">
+          <label>Expected Return Date *</label>
+          <input type="date" id="cl_rdate">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Reason for Loan *</label>
+        <textarea id="cl_reason" placeholder="e.g. Primary laptop under repair, new employee onboarding..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('createLoanModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateLoan()">Create Loan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Return Laptop Modal -->
+<div class="modal-overlay" id="returnModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📥 Return Laptop</h3>
+      <button class="modal-close" onclick="closeModal('returnModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="returnLoanInfo" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:18px;font-size:13px;"></div>
+      <input type="hidden" id="return_loan_id">
+      <div class="form-group">
+        <label>Return Date *</label>
+        <input type="date" id="return_date">
+      </div>
+      <div class="form-group">
+        <label>Condition Notes</label>
+        <textarea id="return_notes" placeholder="e.g. Good condition, screen scratch noted, charger missing..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('returnModal')">Cancel</button>
+      <button class="btn btn-success" onclick="submitReturn()">✓ Confirm Return</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loan Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>📄 Loan Details</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">×</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentFilter = '';
+// Store loans data indexed by id for safe retrieval
+const loansCache = {};
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  loadLoans();
+}
+
+async function loadLoans() {
+  const q = document.getElementById('searchInput').value;
+  const res = await fetch('/api/loans?q=' + encodeURIComponent(q) + '&status=' + currentFilter);
+  const loans = await res.json();
+  const tbody = document.getElementById('loansBody');
+  const today = new Date().toISOString().split('T')[0];
+
+  if (!loans.length) {
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📋</div><h4>No loans found</h4><p>Try adjusting your search or filters</p></div></td></tr>';
+    return;
+  }
+
+  let html = '';
+  loans.forEach(l => {
+    loansCache[l.id] = l;
+    const isOverdue = l.status === 'loaned' && l.expected_return_date < today;
+    const badgeClass = l.status === 'returned' ? 'returned' : isOverdue ? 'overdue' : 'loaned';
+    const badgeText = l.status === 'returned' ? 'Returned' : isOverdue ? 'Overdue' : 'Loaned';
+    const rowStyle = isOverdue ? 'style="background:rgba(239,68,68,.03)"' : '';
+
+    html += '<tr ' + rowStyle + '>';
+    html += '<td><span class="asset-num">' + escHtml(l.laptop_asset_number) + '</span></td>';
+    html += '<td><div style="font-weight:600;">' + escHtml(l.brand) + ' ' + escHtml(l.model) + '</div>';
+    html += '<div style="font-size:11px;color:var(--text2);font-family:var(--mono);">' + escHtml(l.serial_number) + '</div></td>';
+    html += '<td><div style="font-weight:600;">' + escHtml(l.employee_name) + '</div>';
+    html += '<div style="font-size:11px;color:var(--text2);font-family:var(--mono);">' + escHtml(l.employee_id) + '</div></td>';
+    html += '<td style="color:var(--text2);font-size:13px;">' + escHtml(l.department || '—') + '</td>';
+    html += '<td style="font-family:var(--mono);font-size:12px;">' + escHtml(l.loan_date) + '</td>';
+    const rdStyle = isOverdue ? 'color:var(--danger);font-weight:600;' : '';
+    html += '<td style="font-family:var(--mono);font-size:12px;' + rdStyle + '">' + escHtml(l.expected_return_date) + (isOverdue ? ' ⚠' : '') + '</td>';
+    html += '<td><span class="badge badge-' + badgeClass + '"><span class="badge-dot"></span>' + badgeText + '</span></td>';
+    html += '<td><div style="font-size:12px;font-weight:600;">' + escHtml(l.created_by || '—') + '</div>';
+    html += '<div style="font-size:11px;color:var(--text2);font-family:var(--mono);">' + (l.created_at ? l.created_at.slice(0,10) : '') + '</div></td>';
+    html += '<td><div style="display:flex;gap:5px;">';
+    html += '<button class="btn btn-secondary btn-sm btn-icon" onclick="viewLoan(' + l.id + ')" title="Details">👁</button>';
+    if (USER_ROLE !== 'viewer' && l.status === 'loaned') {
+      html += '<button class="btn btn-success btn-sm" onclick="openReturn(' + l.id + ')">Return</button>';
+    }
+    if (USER_ROLE === 'superadmin') {
+      html += '<button class="btn btn-danger btn-sm btn-icon" onclick="deleteLoan(' + l.id + ')" title="Delete">🗑️</button>';
+    }
+    html += '</div></td></tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+function escHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function lookupAsset() {
+  const val = document.getElementById('cl_asset').value.trim();
+  const info = document.getElementById('assetInfo');
+  if (!val) { info.textContent = ''; return; }
+  const r = await fetch('/api/laptops/' + val);
+  if (r.ok) {
+    const l = await r.json();
+    if (l.status === 'available') {
+      info.style.color = 'var(--success)';
+      info.textContent = '✓ ' + l.brand + ' ' + l.model + ' — Available';
+    } else {
+      info.style.color = 'var(--danger)';
+      info.textContent = '✕ ' + l.brand + ' ' + l.model + ' — Currently ' + l.status;
+    }
+  } else {
+    info.style.color = 'var(--danger)';
+    info.textContent = '✕ Laptop not found';
+  }
+}
+
+async function submitCreateLoan() {
+  const asset = document.getElementById('cl_asset').value.trim();
+  const empid = document.getElementById('cl_empid').value.trim();
+  const empname = document.getElementById('cl_empname').value.trim();
+  const dept = document.getElementById('cl_dept').value.trim();
+  const ldate = document.getElementById('cl_ldate').value;
+  const rdate = document.getElementById('cl_rdate').value;
+  const reason = document.getElementById('cl_reason').value.trim();
+
+  if (!asset || !empid || !empname || !ldate || !rdate || !reason) {
+    toast('Please fill all required fields', 'error'); return;
+  }
+
+  const r = await fetch('/api/loans', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      laptop_asset_number: asset,
+      employee_id: empid,
+      employee_name: empname,
+      department: dept,
+      loan_date: ldate,
+      expected_return_date: rdate,
+      reason: reason
+    })
+  });
+  const res = await r.json();
+  if (res.success) {
+    toast('Loan created successfully!');
+    closeModal('createLoanModal');
+    ['cl_asset','cl_empid','cl_empname','cl_dept','cl_ldate','cl_rdate','cl_reason'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('assetInfo').textContent = '';
+    loadLoans();
+  } else {
+    toast(res.error || 'Failed to create loan', 'error');
+  }
+}
+
+function openReturn(loanId) {
+  const l = loansCache[loanId];
+  if (!l) return;
+  document.getElementById('return_loan_id').value = loanId;
+  document.getElementById('return_date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('return_notes').value = '';
+  document.getElementById('returnLoanInfo').innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+    '<div><div style="font-size:11px;color:var(--text2);margin-bottom:3px;">ASSET</div><span class="asset-num">' + escHtml(l.laptop_asset_number) + '</span></div>' +
+    '<div><div style="font-size:11px;color:var(--text2);margin-bottom:3px;">EMPLOYEE</div><strong>' + escHtml(l.employee_name) + '</strong></div>' +
+    '</div>';
+  openModal('returnModal');
+}
+
+async function submitReturn() {
+  const id = document.getElementById('return_loan_id').value;
+  const return_date = document.getElementById('return_date').value;
+  const condition_notes = document.getElementById('return_notes').value.trim();
+  if (!return_date) { toast('Please enter a return date', 'error'); return; }
+  const r = await fetch('/api/loans/' + id + '/return', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ return_date, condition_notes })
+  });
+  const res = await r.json();
+  if (res.success) { toast('Laptop returned successfully!'); closeModal('returnModal'); loadLoans(); }
+  else toast(res.error || 'Error processing return', 'error');
+}
+
+function viewLoan(loanId) {
+  const l = loansCache[loanId];
+  if (!l) return;
+  const today = new Date().toISOString().split('T')[0];
+  const isOverdue = l.status === 'loaned' && l.expected_return_date < today;
+
+  let html = '';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">';
+  html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;">';
+  html += '<div style="font-size:11px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Laptop</div>';
+  html += '<div style="margin-bottom:6px;"><span class="asset-num">' + escHtml(l.laptop_asset_number) + '</span></div>';
+  html += '<div style="font-weight:600;">' + escHtml(l.brand) + ' ' + escHtml(l.model) + '</div>';
+  html += '<div style="font-size:12px;color:var(--text2);font-family:var(--mono);margin-top:4px;">' + escHtml(l.serial_number) + '</div>';
+  html += '</div>';
+  html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;">';
+  html += '<div style="font-size:11px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Employee</div>';
+  html += '<div style="font-weight:600;font-size:15px;">' + escHtml(l.employee_name) + '</div>';
+  html += '<div style="font-size:12px;color:var(--text2);font-family:var(--mono);margin-top:4px;">' + escHtml(l.employee_id) + '</div>';
+  if (l.department) html += '<div style="font-size:13px;color:var(--text2);margin-top:4px;">📍 ' + escHtml(l.department) + '</div>';
+  html += '</div></div>';
+
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px;">';
+  html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;">';
+  html += '<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Loan Date</div>';
+  html += '<div style="font-family:var(--mono);font-size:13px;">' + escHtml(l.loan_date) + '</div></div>';
+  const rdStyle = isOverdue ? 'color:var(--danger);font-weight:700;' : '';
+  html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;">';
+  html += '<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Expected Return</div>';
+  html += '<div style="font-family:var(--mono);font-size:13px;' + rdStyle + '">' + escHtml(l.expected_return_date) + '</div></div>';
+  html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;">';
+  html += '<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Return Date</div>';
+  html += '<div style="font-family:var(--mono);font-size:13px;">' + escHtml(l.return_date || '—') + '</div></div>';
+  html += '</div>';
+
+  html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:12px;">';
+  html += '<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Reason for Loan</div>';
+  html += '<div style="font-size:14px;">' + escHtml(l.reason) + '</div></div>';
+
+  html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:12px;display:flex;gap:24px;">';
+  html += '<div><div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Added By</div>';
+  html += '<div style="font-size:13px;font-weight:600;">' + escHtml(l.created_by || '—') + '</div></div>';
+  html += '<div><div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Added On</div>';
+  const addedOn = l.created_at ? l.created_at.slice(0, 16).replace('T', ' ') : '—';
+  html += '<div style="font-size:13px;font-family:var(--mono);">' + escHtml(addedOn) + '</div></div>';
+  html += '</div>';
+
+  if (l.condition_notes) {
+    html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:12px;">';
+    html += '<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Condition Notes</div>';
+    html += '<div style="font-size:14px;">' + escHtml(l.condition_notes) + '</div></div>';
+  }
+
+  document.getElementById('detailBody').innerHTML = html;
+  openModal('detailModal');
+}
+
+async function deleteLoan(id) {
+  if (!confirm('Delete this loan record?')) return;
+  const r = await fetch('/api/loans/' + id, { method: 'DELETE' });
+  const res = await r.json();
+  if (res.success) { toast('Loan deleted'); loadLoans(); }
+  else toast(res.error || 'Error deleting loan', 'error');
+}
+
+// Init
+document.getElementById('cl_ldate').value = new Date().toISOString().split('T')[0];
+loadLoans();
+</script>
+{% endblock %}

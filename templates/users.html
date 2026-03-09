@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% block title %}Users — LoanTrack{% endblock %}
+
+{% block content %}
+<div class="topbar">
+  <div>
+    <div class="topbar-title">👥 User Management</div>
+    <div style="font-size:12px;color:var(--text2);margin-top:2px;">Only the superadmin can manage accounts</div>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn btn-primary" onclick="openModal('addUserModal')">+ Add User</button>
+  </div>
+</div>
+
+<div class="content" style="padding-top:24px;">
+
+  <div class="card" style="margin-bottom:20px;border-color:rgba(0,212,255,.25);">
+    <div class="card-header" style="background:rgba(0,212,255,.05);">
+      <h3 style="color:var(--accent);">🔐 Superadmin Account</h3>
+      <button class="btn btn-secondary btn-sm" onclick="openModal('changePwModal')">Change Password</button>
+    </div>
+    <div class="card-body" style="padding:16px 24px;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="width:44px;height:44px;border-radius:10px;
+          background:linear-gradient(135deg,#7c3aed,#00d4ff);
+          display:flex;align-items:center;justify-content:center;
+          font-family:var(--mono);font-size:14px;font-weight:700;color:white;">
+          {{ session.username[:2]|upper }}
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:15px;">{{ session.username }}</div>
+          <div style="font-size:11px;color:var(--accent);font-family:var(--mono);letter-spacing:1.5px;margin-top:2px;">SUPERADMIN</div>
+        </div>
+        <div style="margin-left:auto;font-size:12px;color:var(--text2);">Full system access · Cannot be deleted</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3>System Users</h3>
+      {% set non_super = users | selectattr('role', '!=', 'superadmin') | list %}
+      <span style="font-size:12px;color:var(--text2);">{{ non_super|length }} user(s)</span>
+    </div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Permissions</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set non_super = users | selectattr('role', '!=', 'superadmin') | list %}
+          {% if non_super %}
+            {% for user in non_super %}
+            <tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div style="width:34px;height:34px;border-radius:8px;
+                    background:{% if user.role == 'admin' %}linear-gradient(135deg,#374151,#6366f1){% else %}linear-gradient(135deg,#1c2030,#374151){% endif %};
+                    display:flex;align-items:center;justify-content:center;
+                    font-family:var(--mono);font-size:12px;font-weight:700;color:white;">
+                    {{ user.username[:2]|upper }}
+                  </div>
+                  <div style="font-weight:600;">{{ user.username }}</div>
+                </div>
+              </td>
+              <td>
+                {% if user.role == 'admin' %}
+                <span class="badge" style="background:rgba(99,102,241,.15);color:#a5b4fc;border:1px solid rgba(99,102,241,.3);">
+                  <span class="badge-dot"></span> Admin
+                </span>
+                {% else %}
+                <span class="badge badge-available">
+                  <span class="badge-dot"></span> Viewer
+                </span>
+                {% endif %}
+              </td>
+              <td style="font-size:12px;color:var(--text2);">
+                {% if user.role == 'admin' %}Manage inventory & loans
+                {% else %}View & export only{% endif %}
+              </td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--text2);">
+                {{ user.created_at[:10] if user.created_at else '—' }}
+              </td>
+              <td>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-secondary btn-sm" onclick="editUser({{ user.id }}, '{{ user.username }}', '{{ user.role }}')">✏️ Edit</button>
+                  <button class="btn btn-danger btn-sm" onclick="deleteUser({{ user.id }}, '{{ user.username }}')">🗑️</button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="5">
+              <div class="empty-state">
+                <div class="empty-icon">👤</div>
+                <h4>No users yet</h4>
+                <p>Add your first user with the button above</p>
+              </div>
+            </td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+      <div style="font-family:var(--mono);color:#a5b4fc;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:12px;">ADMIN ROLE</div>
+      <ul style="list-style:none;font-size:13px;color:var(--text2);line-height:2.2;">
+        <li>✅ View dashboard & all data</li>
+        <li>✅ Add / edit / delete laptops</li>
+        <li>✅ Create and manage loans</li>
+        <li>✅ Process laptop returns</li>
+        <li>✅ Export CSV reports</li>
+        <li>✅ Print laptop labels</li>
+        <li>❌ Cannot manage users</li>
+      </ul>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+      <div style="font-family:var(--mono);color:var(--success);font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:12px;">VIEWER ROLE</div>
+      <ul style="list-style:none;font-size:13px;color:var(--text2);line-height:2.2;">
+        <li>✅ View dashboard & all data</li>
+        <li>✅ View laptop inventory</li>
+        <li>✅ View loan history</li>
+        <li>✅ Export CSV reports</li>
+        <li>✅ Print laptop labels</li>
+        <li>❌ Cannot add or modify data</li>
+        <li>❌ Cannot manage users</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-overlay" id="addUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>➕ Add New User</h3>
+      <button class="modal-close" onclick="closeModal('addUserModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Username *</label>
+        <input type="text" id="au_username" placeholder="e.g. john.doe" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Password *</label>
+        <div style="position:relative;">
+          <input type="password" id="au_password" placeholder="Minimum 6 characters" autocomplete="new-password">
+          <button type="button" onclick="togglePw('au_password',this)"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text2);cursor:pointer;font-size:15px;">👁</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Role *</label>
+        <select id="au_role">
+          <option value="admin">Admin — Can manage laptops &amp; loans</option>
+          <option value="viewer">Viewer — Read only access</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addUserModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddUser()">Create User</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="editUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Edit User</h3>
+      <button class="modal-close" onclick="closeModal('editUserModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit_user_id">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="edit_username" disabled style="opacity:.5;cursor:not-allowed;">
+      </div>
+      <div class="form-group">
+        <label>New Password</label>
+        <div style="position:relative;">
+          <input type="password" id="edit_password" placeholder="Leave blank to keep current password" autocomplete="new-password">
+          <button type="button" onclick="togglePw('edit_password',this)"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text2);cursor:pointer;font-size:15px;">👁</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Role *</label>
+        <select id="edit_role">
+          <option value="admin">Admin — Can manage laptops &amp; loans</option>
+          <option value="viewer">Viewer — Read only access</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editUserModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditUser()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Superadmin Password Modal -->
+<div class="modal-overlay" id="changePwModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🔐 Change Superadmin Password</h3>
+      <button class="modal-close" onclick="closeModal('changePwModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Current Password *</label>
+        <input type="password" id="cp_current" placeholder="Enter current password">
+      </div>
+      <div class="form-group">
+        <label>New Password *</label>
+        <div style="position:relative;">
+          <input type="password" id="cp_new" placeholder="Minimum 6 characters">
+          <button type="button" onclick="togglePw('cp_new',this)"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text2);cursor:pointer;font-size:15px;">👁</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Confirm New Password *</label>
+        <input type="password" id="cp_confirm" placeholder="Repeat new password">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('changePwModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitChangePw()">Update Password</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePw(inputId, btn) {
+  const input = document.getElementById(inputId);
+  input.type = input.type === 'password' ? 'text' : 'password';
+  btn.textContent = input.type === 'password' ? '👁' : '🙈';
+}
+
+async function submitAddUser() {
+  const username = document.getElementById('au_username').value.trim();
+  const password = document.getElementById('au_password').value;
+  const role = document.getElementById('au_role').value;
+  if (!username || !password) { toast('Fill all required fields', 'error'); return; }
+  if (password.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+  const r = await fetch('/api/users', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ username, password, role })
+  });
+  const res = await r.json();
+  if (res.success) { toast(`User "${username}" created!`); closeModal('addUserModal'); location.reload(); }
+  else toast(res.error || 'Error creating user', 'error');
+}
+
+function editUser(id, username, role) {
+  document.getElementById('edit_user_id').value = id;
+  document.getElementById('edit_username').value = username;
+  document.getElementById('edit_password').value = '';
+  document.getElementById('edit_role').value = role;
+  openModal('editUserModal');
+}
+
+async function submitEditUser() {
+  const id = document.getElementById('edit_user_id').value;
+  const password = document.getElementById('edit_password').value;
+  const role = document.getElementById('edit_role').value;
+  if (password && password.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+  const r = await fetch(`/api/users/${id}`, {
+    method: 'PUT', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ role, password: password || null })
+  });
+  const res = await r.json();
+  if (res.success) { toast('User updated!'); closeModal('editUserModal'); location.reload(); }
+  else toast(res.error || 'Error', 'error');
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Delete user "${username}"?\nThey will no longer be able to log in.`)) return;
+  const r = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+  const res = await r.json();
+  if (res.success) { toast(`User "${username}" deleted`); location.reload(); }
+  else toast(res.error || 'Error', 'error');
+}
+
+async function submitChangePw() {
+  const current = document.getElementById('cp_current').value;
+  const newPw = document.getElementById('cp_new').value;
+  const confirm = document.getElementById('cp_confirm').value;
+  if (!current || !newPw || !confirm) { toast('Fill all fields', 'error'); return; }
+  if (newPw.length < 6) { toast('New password must be at least 6 characters', 'error'); return; }
+  if (newPw !== confirm) { toast('Passwords do not match', 'error'); return; }
+  const r = await fetch('/api/users/change-password', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ current_password: current, new_password: newPw })
+  });
+  const res = await r.json();
+  if (res.success) { toast('Password changed successfully!'); closeModal('changePwModal'); ['cp_current','cp_new','cp_confirm'].forEach(id => document.getElementById(id).value = ''); }
+  else toast(res.error || 'Error', 'error');
+}
+</script>
+{% endblock %}
