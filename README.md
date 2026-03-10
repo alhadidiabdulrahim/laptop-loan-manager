@@ -152,7 +152,6 @@ The system has three roles:
 ```
 laptop-loan-manager/
 ├── app.py               ← Flask application — all routes, API, and auth logic
-├── seed.py              ← Optional: creates sample data for testing
 ├── laptop_loans.db      ← SQLite database (auto-created on first run)
 ├── README.md            ← This file
 └── templates/
