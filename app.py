@@ -494,6 +494,4 @@ if __name__ == '__main__':
     init_db()
     print("\n🖥️  Laptop Loan Manager started!")
     print("   URL: http://localhost:5000")
-    print("   Admin login: admin / admin123")
-    print("   Viewer login: viewer / viewer123\n")
     app.run(debug=True, port=5000)
